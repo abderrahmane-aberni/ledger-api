@@ -1,5 +1,9 @@
 # myAccountant API
 
+**Live demo:** [myaccountant-api-eight.vercel.app](https://myaccountant-api-eight.vercel.app) &middot; **API docs:** [myaccountant-api.onrender.com/docs](https://myaccountant-api.onrender.com/docs)
+
+> The backend runs on Render's free tier and spins down after inactivity — the first request after a quiet period can take up to ~50 seconds to wake up. Everything after that is normal speed.
+
 A personal finance tracking REST API built with FastAPI, PostgreSQL, and SQLAlchemy — JWT-authenticated, with budgets, CSV import/export, and real SQL aggregation reporting.
 
 ## Problem statement
