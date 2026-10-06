@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import {
   listCategories, createCategory,
   listTransactions, createTransaction, deleteTransaction,
@@ -13,6 +13,15 @@ const RANGE_OPTIONS = [
   { value: '3years', label: 'Last 3 years' },
 ]
 
+const TX_FILTERS = [
+  { value: 'latest5', label: 'Latest 5' },
+  { value: 'latest10', label: 'Latest 10' },
+  { value: 'today', label: 'Today' },
+  { value: '10days', label: 'Last 10 days' },
+  { value: '30days', label: 'Last 30 days' },
+  { value: 'all', label: 'All transactions' },
+]
+
 function formatDate(iso) {
   try {
     return new Date(iso).toLocaleDateString(undefined, { day: 'numeric', month: 'short' })
@@ -21,18 +30,44 @@ function formatDate(iso) {
   }
 }
 
+function filterTransactions(transactions, filter) {
+  // `transactions` is already sorted newest-first by the API.
+  if (filter === 'all') return transactions
+  if (filter === 'latest5') return transactions.slice(0, 5)
+  if (filter === 'latest10') return transactions.slice(0, 10)
+
+  const now = new Date()
+  let cutoff
+  if (filter === 'today') {
+    cutoff = new Date(now.getFullYear(), now.getMonth(), now.getDate())
+  } else if (filter === '10days') {
+    cutoff = new Date(now.getTime() - 10 * 24 * 60 * 60 * 1000)
+  } else if (filter === '30days') {
+    cutoff = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000)
+  } else {
+    return transactions.slice(0, 10)
+  }
+  return transactions.filter((tx) => new Date(tx.date) >= cutoff)
+}
+
 export default function Dashboard({ onLogout }) {
   const [categories, setCategories] = useState([])
   const [transactions, setTransactions] = useState([])
   const [summary, setSummary] = useState(null)
   const [range, setRange] = useState('month')
+  const [txFilter, setTxFilter] = useState('latest5')
+  const [txMenuOpen, setTxMenuOpen] = useState(false)
   const [error, setError] = useState('')
 
   const [newCategoryName, setNewCategoryName] = useState('')
   const [form, setForm] = useState({ amount: '', type: 'expense', description: '', category_id: '' })
 
+  const txMenuRef = useRef(null)
+
   const categoryName = (id) => categories.find((c) => c.id === id)?.name
   const rangeLabel = RANGE_OPTIONS.find((r) => r.value === range)?.label ?? range
+  const txFilterLabel = TX_FILTERS.find((f) => f.value === txFilter)?.label ?? 'Transactions'
+  const visibleTransactions = filterTransactions(transactions, txFilter)
 
   async function refresh() {
     try {
@@ -48,6 +83,16 @@ export default function Dashboard({ onLogout }) {
   }
 
   useEffect(() => { refresh() }, [range])
+
+  useEffect(() => {
+    function handleClickOutside(e) {
+      if (txMenuRef.current && !txMenuRef.current.contains(e.target)) {
+        setTxMenuOpen(false)
+      }
+    }
+    document.addEventListener('mousedown', handleClickOutside)
+    return () => document.removeEventListener('mousedown', handleClickOutside)
+  }, [])
 
   async function handleAddCategory(e) {
     e.preventDefault()
@@ -189,9 +234,29 @@ export default function Dashboard({ onLogout }) {
         </div>
 
         <div>
-          <h2>Transactions</h2>
+          <div className="tx-menu-wrap" ref={txMenuRef}>
+            <button className="tx-menu-btn" type="button" onClick={() => setTxMenuOpen((o) => !o)}>
+              Transactions <span className="tx-menu-sub">&middot; {txFilterLabel}</span>
+              <span className="caret">{txMenuOpen ? '▴' : '▾'}</span>
+            </button>
+            {txMenuOpen && (
+              <ul className="tx-menu">
+                {TX_FILTERS.map((f) => (
+                  <li key={f.value}>
+                    <button
+                      type="button"
+                      className={f.value === txFilter ? 'active' : ''}
+                      onClick={() => { setTxFilter(f.value); setTxMenuOpen(false) }}
+                    >
+                      {f.label}
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </div>
           <ul className="tx-list">
-            {transactions.map((tx) => (
+            {visibleTransactions.map((tx) => (
               <li key={tx.id} className={tx.type}>
                 <span className="tx-dot" />
                 <span className="tx-main">
@@ -213,7 +278,7 @@ export default function Dashboard({ onLogout }) {
                 </button>
               </li>
             ))}
-            {transactions.length === 0 && <li className="empty">No transactions yet.</li>}
+            {visibleTransactions.length === 0 && <li className="empty">No transactions in this range.</li>}
           </ul>
         </div>
       </section>
